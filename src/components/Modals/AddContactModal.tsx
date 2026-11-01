@@ -8,24 +8,32 @@ interface Props {
 
 export const AddContactModal: React.FC<Props> = ({ isOpen, onClose, onAddContact }) => {
   const [pin, setPin] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen) return null;
 
   const handleSave = () => {
+    setErrorMsg('');
     const trimmed = pin.trim().toUpperCase();
     if (!trimmed || trimmed.length !== 8) {
-      alert('PIN harus 8 digit!');
+      setErrorMsg('PIN harus terdiri dari 8 digit huruf/angka!');
       return;
     }
     onAddContact(trimmed);
     setPin('');
+    setErrorMsg('');
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-xs p-4 shadow-2xl border border-white">
         <h3 className="font-bold text-sm text-slate-800 mb-1">Tambah Kontak Baru</h3>
-        <p className="text-xs text-slate-500 mb-3">Masukkan 8 digit PIN Chatzz temanmu.</p>
+        <p className="text-xs text-slate-500 mb-2">Masukkan 8 digit PIN Chatzz temanmu.</p>
+        {errorMsg && (
+          <div className="bg-red-50 border border-red-200 text-red-600 text-[10px] p-2 rounded-xl mb-2 font-medium">
+            {errorMsg}
+          </div>
+        )}
         <input
           type="text"
           value={pin}

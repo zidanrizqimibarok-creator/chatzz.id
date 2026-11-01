@@ -231,7 +231,7 @@ export const ChatScreen: React.FC<Props> = ({
         setRecordSeconds((prev) => prev + 1);
       }, 1000);
     } catch {
-      alert('Izin mikrofon tidak diberikan atau perangkat audio tidak ditemukan.');
+      onShowToast('Mikrofon Ditolak', 'Izin mikrofon tidak diberikan atau perangkat audio tidak ditemukan.');
       setIsRecording(false);
     }
   };

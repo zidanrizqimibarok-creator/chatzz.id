@@ -16,6 +16,7 @@ export const GroupChatModal: React.FC<Props> = ({
 }) => {
   const [groupName, setGroupName] = useState('');
   const [selectedPins, setSelectedPins] = useState<string[]>([]);
+  const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen) return null;
 
@@ -28,18 +29,20 @@ export const GroupChatModal: React.FC<Props> = ({
   };
 
   const handleCreate = () => {
+    setErrorMsg('');
     const trimmed = groupName.trim();
     if (!trimmed) {
-      alert('Masukkan nama grup!');
+      setErrorMsg('Masukkan nama grup!');
       return;
     }
     if (selectedPins.length === 0) {
-      alert('Pilih minimal 1 kontak untuk bergabung ke grup!');
+      setErrorMsg('Pilih minimal 1 kontak untuk bergabung ke grup!');
       return;
     }
     onCreateGroup(trimmed, selectedPins);
     setGroupName('');
     setSelectedPins([]);
+    setErrorMsg('');
     onClose();
   };
 
@@ -55,6 +58,12 @@ export const GroupChatModal: React.FC<Props> = ({
             <p className="text-[9px] text-slate-400">Obrolan multi-kontak serentak</p>
           </div>
         </div>
+
+        {errorMsg && (
+          <div className="bg-red-50 border border-red-200 text-red-600 text-[10px] p-2 rounded-xl mb-2 font-medium">
+            {errorMsg}
+          </div>
+        )}
 
         <div className="mb-2">
           <label className="text-[10px] font-bold text-slate-500 block mb-1">

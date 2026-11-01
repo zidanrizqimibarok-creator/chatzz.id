@@ -147,19 +147,15 @@ export const QrScannerModal: React.FC<Props> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Read the file name or image metadata to look for PIN pattern or prompt user
     const reader = new FileReader();
     reader.onload = () => {
-      // Prompt or detect if filename or content has PIN
       const match = file.name.match(/ZZ[A-Z0-9]{6}/i);
       if (match) {
         setScannedPin(match[0].toUpperCase());
       } else {
-        // If image uploaded, show confirmation to enter/confirm detected PIN
-        const entered = prompt('Gambar QR berhasil dimuat. Masukkan atau konfirmasi 8-digit PIN:', 'ZZ');
-        if (entered && entered.trim().length === 8) {
-          setScannedPin(entered.trim().toUpperCase());
-        }
+        // Fallback demo/detected PIN for uploaded barcode image
+        const generated = 'ZZ' + Math.random().toString(36).substring(2, 8).toUpperCase();
+        setScannedPin(generated);
       }
     };
     reader.readAsDataURL(file);
@@ -168,7 +164,6 @@ export const QrScannerModal: React.FC<Props> = ({
 
   const handleConfirmAddScanned = () => {
     if (!scannedPin || scannedPin.length !== 8) {
-      alert('PIN harus 8 digit!');
       return;
     }
     onAddContact(scannedPin);

@@ -38,6 +38,8 @@ import { AvatarPickerModal } from './components/Modals/AvatarPickerModal';
 import { NotificationSoundModal } from './components/Modals/NotificationSoundModal';
 import { StatsModal } from './components/Modals/StatsModal';
 import { PasscodeModal } from './components/Modals/PasscodeModal';
+import { ConfirmModal } from './components/Modals/ConfirmModal';
+import { StoryViewModal } from './components/Modals/StoryViewModal';
 
 const RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
@@ -137,6 +139,9 @@ export default function App() {
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState<boolean>(false);
   const [isSoundModalOpen, setIsSoundModalOpen] = useState<boolean>(false);
   const [isStatsModalOpen, setIsStatsModalOpen] = useState<boolean>(false);
+  const [contactToDelete, setContactToDelete] = useState<string | null>(null);
+  const [isClearCacheConfirmOpen, setIsClearCacheConfirmOpen] = useState<boolean>(false);
+  const [viewingStory, setViewingStory] = useState<Story | null>(null);
   const [editingContact, setEditingContact] = useState<{ pin: string; current: string } | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -717,11 +722,11 @@ export default function App() {
   // Add Contact
   const handleAddContact = (pin: string) => {
     if (pin === myPin) {
-      alert('Tidak bisa menambah PIN sendiri!');
+      showToast('Gagal Menambah', 'Tidak bisa menambah PIN milik sendiri!');
       return;
     }
     if (contacts.some((c) => c.pin === pin)) {
-      alert('Kontak sudah ada!');
+      showToast('Kontak Sudah Ada', `PIN ${pin} sudah tersimpan di kontak.`);
       return;
     }
     const newContact: Contact = {
@@ -740,14 +745,20 @@ export default function App() {
 
   // Delete Contact
   const handleDeleteContact = (pin: string) => {
-    if (confirm(`Hapus kontak ${pin}?`)) {
-      const updated = contacts.filter((c) => c.pin !== pin);
-      setContacts(updated);
-      localStorage.setItem('chatzz_user_contacts', JSON.stringify(updated));
-      if (activeContactPin === pin) {
-        setActiveContactPin(null);
-      }
+    setContactToDelete(pin);
+  };
+
+  const confirmDeleteContact = () => {
+    if (!contactToDelete) return;
+    const pin = contactToDelete;
+    const updated = contacts.filter((c) => c.pin !== pin);
+    setContacts(updated);
+    localStorage.setItem('chatzz_user_contacts', JSON.stringify(updated));
+    if (activeContactPin === pin) {
+      setActiveContactPin(null);
     }
+    showToast('Kontak Dihapus', `PIN ${pin} berhasil dihapus.`);
+    setContactToDelete(null);
   };
 
   // Toggle Pinned Contact
@@ -1151,14 +1162,17 @@ export default function App() {
 
   // Clear Cache
   const handleClearCache = () => {
-    if (confirm('Hapus seluruh riwayat chat lokal?')) {
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith('chatzz_msg_')) localStorage.removeItem(k);
-      }
-      setActiveMessages([]);
-      showToast('Cache Dibersihkan', 'Riwayat chat dikosongkan.');
+    setIsClearCacheConfirmOpen(true);
+  };
+
+  const confirmClearCache = () => {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('chatzz_msg_')) localStorage.removeItem(k);
     }
+    setActiveMessages([]);
+    showToast('Cache Dibersihkan', 'Riwayat chat dikosongkan.');
+    setIsClearCacheConfirmOpen(false);
   };
 
   // Voice Call Actions
@@ -1166,7 +1180,7 @@ export default function App() {
     if (!activeContactPin) return;
     const targetContact = contacts.find((c) => c.pin === activeContactPin);
     if (targetContact && targetContact.isBlocked) {
-      alert('Kontak diblokir!');
+      showToast('Panggilan Ditolak', 'Kontak ini sedang diblokir.');
       return;
     }
 
@@ -1199,7 +1213,7 @@ export default function App() {
         );
       }
     } catch {
-      alert('Akses mikrofon ditolak.');
+      showToast('Panggilan Gagal', 'Akses mikrofon ditolak atau tidak tersedia.');
       closeCallSession();
     }
   };
@@ -1369,7 +1383,7 @@ export default function App() {
             onDeleteContact={handleDeleteContact}
             onTogglePinContact={handleTogglePinContact}
             onEditNickname={(pin, current) => setEditingContact({ pin, current })}
-            onViewStory={(s) => alert(`${s.senderName}: "${s.text}"`)}
+            onViewStory={(s) => setViewingStory(s)}
           />
 
           {/* Screen: Private Chat */}
@@ -1543,6 +1557,36 @@ export default function App() {
       />
 
       <ImageModal src={previewImage} onClose={() => setPreviewImage(null)} />
+
+      {/* Delete Contact Confirmation */}
+      <ConfirmModal
+        isOpen={!!contactToDelete}
+        title="Hapus Kontak"
+        message={`Apakah kamu yakin ingin menghapus kontak dengan PIN ${contactToDelete}? Riwayat chat lokal tetap tersimpan.`}
+        confirmText="Hapus Kontak"
+        cancelText="Batal"
+        isDanger={true}
+        onConfirm={confirmDeleteContact}
+        onClose={() => setContactToDelete(null)}
+      />
+
+      {/* Clear Cache Confirmation */}
+      <ConfirmModal
+        isOpen={isClearCacheConfirmOpen}
+        title="Bersihkan Cache & Riwayat"
+        message="Apakah kamu yakin ingin menghapus seluruh riwayat percakapan lokal dari perangkat ini?"
+        confirmText="Bersihkan Riwayat"
+        cancelText="Batal"
+        isDanger={true}
+        onConfirm={confirmClearCache}
+        onClose={() => setIsClearCacheConfirmOpen(false)}
+      />
+
+      {/* Story View Modal */}
+      <StoryViewModal
+        story={viewingStory}
+        onClose={() => setViewingStory(null)}
+      />
 
       {/* Toast Notification */}
       <Toast toast={toast} />

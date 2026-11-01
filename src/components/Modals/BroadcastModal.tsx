@@ -14,21 +14,24 @@ export const BroadcastModal: React.FC<Props> = ({
   onSendBroadcast,
 }) => {
   const [text, setText] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen) return null;
 
   const handleSend = () => {
+    setErrorMsg('');
     const trimmed = text.trim();
     if (!trimmed) {
-      alert('Tulis isi pesan siaran!');
+      setErrorMsg('Tulis isi pesan siaran!');
       return;
     }
     if (contactCount === 0) {
-      alert('Kamu belum memiliki kontak untuk dikirimi pesan siaran!');
+      setErrorMsg('Kamu belum memiliki kontak untuk dikirimi pesan siaran!');
       return;
     }
     onSendBroadcast(trimmed);
     setText('');
+    setErrorMsg('');
   };
 
   return (
@@ -43,6 +46,11 @@ export const BroadcastModal: React.FC<Props> = ({
         <p className="text-xs text-slate-500 mb-2">
           Kirim pesan siaran massal sekaligus ke seluruh <b>{contactCount}</b> kontakmu.
         </p>
+        {errorMsg && (
+          <div className="bg-red-50 border border-red-200 text-red-600 text-[10px] p-2 rounded-xl mb-2 font-medium">
+            {errorMsg}
+          </div>
+        )}
 
         <textarea
           value={text}
