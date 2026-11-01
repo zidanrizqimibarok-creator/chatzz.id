@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { formatBytes, estimatedBase64Bytes } from '../../utils/image';
 
 interface Props {
   isOpen: boolean;
   imageSrc: string | null;
+  /** Ukuran file asli sebelum dikompres (untuk badge hemat ukuran) */
+  originalBytes?: number;
   onClose: () => void;
   onSend: (imageSrc: string, caption: string) => void;
 }
@@ -10,12 +13,17 @@ interface Props {
 export const PhotoCaptionModal: React.FC<Props> = ({
   isOpen,
   imageSrc,
+  originalBytes = 0,
   onClose,
   onSend,
 }) => {
   const [caption, setCaption] = useState('');
 
   if (!isOpen || !imageSrc) return null;
+
+  const compressedBytes = estimatedBase64Bytes(imageSrc);
+  const savedPct =
+    originalBytes > 0 ? Math.max(0, Math.round((1 - compressedBytes / originalBytes) * 100)) : 0;
 
   const handleSend = () => {
     onSend(imageSrc, caption.trim());
@@ -38,12 +46,26 @@ export const PhotoCaptionModal: React.FC<Props> = ({
           </button>
         </div>
 
-        <div className="relative w-full max-h-56 bg-black rounded-2xl overflow-hidden mb-3 border border-slate-800 flex items-center justify-center">
+        <div className="relative w-full max-h-56 bg-black rounded-2xl overflow-hidden mb-2 border border-slate-800 flex items-center justify-center">
           <img
             src={imageSrc}
             alt="Upload preview"
             className="max-h-56 object-contain"
           />
+        </div>
+
+        {/* Info ukuran hasil kompresi otomatis */}
+        <div className="flex items-center justify-between text-[9px] text-slate-400 mb-3 px-1">
+          <span>
+            <i className="fa-solid fa-file-image mr-1 text-emerald-400"></i>
+            Ukuran kirim: {formatBytes(compressedBytes)}
+          </span>
+          {savedPct > 0 && (
+            <span className="bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.5 rounded-md">
+              <i className="fa-solid fa-compress mr-1"></i>
+              Kompres Otomatis -{savedPct}%
+            </span>
+          )}
         </div>
 
         <input

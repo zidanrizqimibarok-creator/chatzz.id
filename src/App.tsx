@@ -13,6 +13,7 @@ import {
   GroupRoom,
 } from './types';
 import { playPingSound, playMessageSound } from './utils/sound';
+import { safeSetItem, MAX_PAYLOAD_BYTES } from './utils/image';
 import { BootScreen } from './components/BootScreen';
 import { Header } from './components/Header';
 import { FooterBar } from './components/FooterBar';
@@ -436,7 +437,7 @@ export default function App() {
         msgs = msgs.map((m) =>
           m.timestamp === data.messageTimestamp ? { ...m, deletedForEveryone: true } : m
         );
-        localStorage.setItem(storageKey, JSON.stringify(msgs));
+        safeSetItem(storageKey, JSON.stringify(msgs));
         if (activeContactPin === partnerPin) {
           setActiveMessages(msgs);
         }
@@ -465,7 +466,7 @@ export default function App() {
         });
 
         if (updated) {
-          localStorage.setItem(storageKey, JSON.stringify(msgs));
+          safeSetItem(storageKey, JSON.stringify(msgs));
           if (activeContactPin === partnerPin) {
             setActiveMessages([...msgs]);
           }
@@ -500,7 +501,7 @@ export default function App() {
           }
         });
         if (updated) {
-          localStorage.setItem(storageKey, JSON.stringify(msgs));
+          safeSetItem(storageKey, JSON.stringify(msgs));
           if (activeContactPin === data.sender) {
             setActiveMessages([...msgs]);
           }
@@ -545,7 +546,7 @@ export default function App() {
             status: 'R',
           };
           msgs.push(newMsg);
-          localStorage.setItem(storageKey, JSON.stringify(msgs));
+          safeSetItem(storageKey, JSON.stringify(msgs));
 
           if (activeContactPin === partnerPin) {
             setActiveMessages((prev) => [...prev, newMsg]);
@@ -685,7 +686,7 @@ export default function App() {
               status: messageStatus,
             };
             msgs.push(newMsg);
-            localStorage.setItem(storageKey, JSON.stringify(msgs));
+            safeSetItem(storageKey, JSON.stringify(msgs));
 
             if (!isBlocked && mqttClientRef.current?.connected) {
               mqttClientRef.current.publish(
@@ -863,13 +864,38 @@ export default function App() {
       status: messageStatus,
     };
     msgs.push(newMsg);
-    localStorage.setItem(storageKey, JSON.stringify(msgs));
+    const saved = safeSetItem(storageKey, JSON.stringify(msgs));
+    if (!saved) {
+      showToast('Penyimpanan Penuh', 'Riwayat chat lokal penuh. Hapus beberapa pesan/foto lama.', true);
+    }
     setActiveMessages((prev) => [...prev, newMsg]);
 
     if (!isBlocked && mqttClientRef.current?.connected) {
-      mqttClientRef.current.publish(`chatzz/user/${activeContactPin}/inbox`, JSON.stringify(payload), {
-        qos: 1,
-      });
+      const rawPayload = JSON.stringify(payload);
+      // BUG FIX: jangan kirim payload yang melebihi batas broker — dulu paket
+      // foto besar dibuang diam-diam oleh broker sehingga pesan "hilang" tanpa error.
+      if (rawPayload.length > MAX_PAYLOAD_BYTES) {
+        msgs.pop();
+        safeSetItem(storageKey, JSON.stringify(msgs));
+        setActiveMessages((prev) => prev.slice(0, -1));
+        showToast(
+          'Foto Melebihi Batas',
+          `Ukuran paket ${Math.round(rawPayload.length / 1024 / 1024)} MB melebihi batas broker (${Math.round(MAX_PAYLOAD_BYTES / 1024 / 1024)} MB). Coba foto lain.`,
+          true
+        );
+        return;
+      }
+      try {
+        mqttClientRef.current.publish(`chatzz/user/${activeContactPin}/inbox`, rawPayload, {
+          qos: 1,
+        });
+      } catch (err: any) {
+        msgs.pop();
+        safeSetItem(storageKey, JSON.stringify(msgs));
+        setActiveMessages((prev) => prev.slice(0, -1));
+        showToast('Gagal Kirim', err?.message || 'Koneksi MQTT terputus.', true);
+        return;
+      }
     } else if (isBlocked) {
       showToast('Gagal', 'Kontak diblokir (NS).', true);
     }
@@ -892,7 +918,7 @@ export default function App() {
     msgs = msgs.map((m) =>
       m.timestamp === timestamp ? { ...m, deletedForEveryone: true } : m
     );
-    localStorage.setItem(storageKey, JSON.stringify(msgs));
+    safeSetItem(storageKey, JSON.stringify(msgs));
     setActiveMessages(msgs);
 
     if (mqttClientRef.current?.connected) {
@@ -915,7 +941,7 @@ export default function App() {
     const storageKey = `chatzz_msg_${[myPin, activeContactPin].sort().join('_')}`;
     let msgs: Message[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
     msgs = msgs.filter((m) => m.timestamp !== timestamp);
-    localStorage.setItem(storageKey, JSON.stringify(msgs));
+    safeSetItem(storageKey, JSON.stringify(msgs));
     setActiveMessages(msgs);
     showToast('Pesan Dihapus', 'Pesan dihapus dari riwayat lokal.');
   };
@@ -969,7 +995,7 @@ export default function App() {
         status: 'S',
       };
       msgs.push(newMsg);
-      localStorage.setItem(storageKey, JSON.stringify(msgs));
+      safeSetItem(storageKey, JSON.stringify(msgs));
 
       if (mqttClientRef.current?.connected) {
         mqttClientRef.current.publish(
@@ -1035,7 +1061,7 @@ export default function App() {
     });
 
     if (updated) {
-      localStorage.setItem(storageKey, JSON.stringify(msgs));
+      safeSetItem(storageKey, JSON.stringify(msgs));
       setActiveMessages(msgs);
 
       if (mqttClientRef.current?.connected) {
@@ -1085,7 +1111,7 @@ export default function App() {
       status: 'S',
     };
     msgs.push(newMsg);
-    localStorage.setItem(storageKey, JSON.stringify(msgs));
+    safeSetItem(storageKey, JSON.stringify(msgs));
     setActiveMessages((prev) => [...prev, newMsg]);
 
     if (mqttClientRef.current?.connected) {

@@ -5,6 +5,7 @@ import { ReactionPicker } from './ReactionPicker';
 import { PhotoCaptionModal } from './Modals/PhotoCaptionModal';
 import { WallpaperModal, WALLPAPER_PRESETS } from './Modals/WallpaperModal';
 import { DeleteMessageModal } from './Modals/DeleteMessageModal';
+import { compressImageForChat, formatBytes } from '../utils/image';
 
 interface Props {
   myPin: string;
@@ -75,6 +76,9 @@ export const ChatScreen: React.FC<Props> = ({
 
   // Photo Caption Modal State
   const [pendingImageSrc, setPendingImageSrc] = useState<string | null>(null);
+  // Foto asli (belum dikompres) utk perbandingan ukuran di modal preview
+  const [pendingOriginalBytes, setPendingOriginalBytes] = useState<number>(0);
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
 
   // Active Reaction Picker
   const [activeReactionTimestamp, setActiveReactionTimestamp] = useState<number | null>(null);
@@ -149,25 +153,76 @@ export const ChatScreen: React.FC<Props> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset nilai input SEGERA agar file yang sama bisa dipilih ulang (bug lama)
+    e.target.value = '';
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      const base64Img = uploadEvent.target?.result as string;
-      if (base64Img) {
-        setPendingImageSrc(base64Img);
+    if (!file.type.startsWith('image/')) {
+      onShowToast('Foto Gagal', 'File bukan gambar. Pilih JPG/PNG/GIF/WebP.');
+      return;
+    }
+
+    setIsCompressingPhoto(true);
+    try {
+      // BUG FIX: kompresi dulu sebelum kirim — payload base64 mentah foto
+      // kamera (3-10 MB) ditolak broker MQTT sehingga foto tidak pernah terkirim.
+      const result = await compressImageForChat(file);
+      setPendingOriginalBytes(result.originalBytes);
+      setPendingImageSrc(result.dataUrl);
+      const saved = Math.max(0, 1 - result.compressedBytes / Math.max(1, result.originalBytes));
+      if (saved > 0.1) {
+        onShowToast(
+          'Foto Dikompres Otomatis',
+          `${formatBytes(result.originalBytes)} → ${formatBytes(result.compressedBytes)} (-${Math.round(saved * 100)}%)`
+        );
       }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    } catch (err: any) {
+      onShowToast('Foto Gagal Dimuat', err?.message || 'Tidak dapat memproses gambar.');
+    } finally {
+      setIsCompressingPhoto(false);
+    }
   };
 
   const handleSendImageWithCaption = (imgSrc: string, caption: string) => {
     onSendMessage(`[IMAGE]:${imgSrc}`, false, caption);
     setPendingImageSrc(null);
+    setPendingOriginalBytes(0);
   };
+
+  // FITUR BARU: Tempel foto langsung dari clipboard (Ctrl+V / paste gambar)
+  useEffect(() => {
+    const handlePaste = async (e: Event) => {
+      const clip = (e as ClipboardEvent).clipboardData;
+      const items = clip?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          e.preventDefault();
+          setIsCompressingPhoto(true);
+          try {
+            const result = await compressImageForChat(file);
+            setPendingOriginalBytes(result.originalBytes);
+            setPendingImageSrc(result.dataUrl);
+            onShowToast(
+              'Foto dari Clipboard',
+              `Hasil tempel siap dikirim (${formatBytes(result.compressedBytes)}).`
+            );
+          } catch (err: any) {
+            onShowToast('Foto Gagal Dimuat', err?.message || 'Tidak dapat memproses gambar.');
+          } finally {
+            setIsCompressingPhoto(false);
+          }
+          return;
+        }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [onShowToast]);
 
   // Robust Voice Note Recording (Fixed for all browsers)
   const startRecording = async () => {
@@ -843,10 +898,15 @@ export const ChatScreen: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="text-emerald-600 hover:text-emerald-800 p-1.5 text-xs"
-              title="Kirim Foto"
+              disabled={isCompressingPhoto}
+              className={`p-1.5 text-xs ${
+                isCompressingPhoto
+                  ? 'text-emerald-300 cursor-wait'
+                  : 'text-emerald-600 hover:text-emerald-800'
+              }`}
+              title={isCompressingPhoto ? 'Mengompres foto...' : 'Kirim Foto (kompres otomatis)'}
             >
-              <i className="fa-solid fa-image"></i>
+              <i className={`fa-solid ${isCompressingPhoto ? 'fa-spinner fa-spin' : 'fa-image'}`}></i>
             </button>
             <input
               type="file"
@@ -917,7 +977,11 @@ export const ChatScreen: React.FC<Props> = ({
       <PhotoCaptionModal
         isOpen={!!pendingImageSrc}
         imageSrc={pendingImageSrc}
-        onClose={() => setPendingImageSrc(null)}
+        originalBytes={pendingOriginalBytes}
+        onClose={() => {
+          setPendingImageSrc(null);
+          setPendingOriginalBytes(0);
+        }}
         onSend={handleSendImageWithCaption}
       />
     </div>
